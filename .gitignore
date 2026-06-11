@@ -1,0 +1,7 @@
+# 세이브 파일
+pokeclone_save.json
+*pokeclone_save*.json
+
+# 개발 관련
+node_modules/
+*.log
