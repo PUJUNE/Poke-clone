@@ -45,7 +45,7 @@ const STONES = new Set(["불꽃의돌", "물의돌", "천둥의돌", "잎의돌"
 /* ===================== 게임 상태 ===================== */
 const SAVE_VER = 3;
 function freshFlags() {
-  return { items: [], legends: [], badges: [], npcDone: [],
+  return { items: [], legends: [], badges: [], npcDone: [], bikeOn: false,
     quests: { parcel: 0, fossil: 0, champion: false }, starter: 1 };
 }
 const game = {
@@ -711,12 +711,16 @@ async function startBattle(enemy, opts = {}) {
 }
 
 /* ===================== 월드: 이동/이벤트 ===================== */
+const canSurf = () => (game.bag["비전머신03"] || 0) > 0 && game.flags.badges.includes("핑크배지");
 function tryStartMove(dx, dy, dir) {
   game.dir = dir;
   const tx = game.px + dx, ty = game.py + dy;
-  if (SOLID_TILES.has(worldTile(tx, ty))) return;
+  const t = worldTile(tx, ty);
+  if (t === "W" ? !canSurf() : SOLID_TILES.has(t)) return;
   if (npcAt(tx, ty)) return;
-  game.moving = { fx: game.px, fy: game.py, tx, ty, start: performance.now(), dur: 150 };
+  const onWater = t === "W" || worldTile(game.px, game.py) === "W";
+  const dur = !onWater && game.flags.bikeOn && game.bag["자전거"] ? 75 : 150;
+  game.moving = { fx: game.px, fy: game.py, tx, ty, start: performance.now(), dur };
 }
 async function onArrive() {
   const t = worldTile(game.px, game.py);
@@ -852,6 +856,19 @@ async function interactNPC(npc) {
       game.money -= npc.price;
       sfx.money();
       await receiveMon(makeMon(npc.mon[0], npc.mon[1]));
+      if (!npc.repeat) markDone(npc);
+      return;
+    }
+    case "itemVendor": {
+      if (!npc.repeat && done) { await msg(`${npc.name}: 품절이야. 미안하군!`); return; }
+      for (const l of npc.lines) await msg(`${npc.name}: ${l}`);
+      const c = await choose([`산다 (${npc.price}원)`, "그만둔다"], { cancelable: false, x: 60, y: 300, w: 280 });
+      if (c !== 0) { await msg(`${npc.name}: 언제든 다시 와!`); return; }
+      if (game.money < npc.price) { await msg("돈이 부족하다!"); return; }
+      game.money -= npc.price;
+      sfx.money();
+      game.bag[npc.item] = (game.bag[npc.item] || 0) + 1;
+      await msg(`${josa(npc.item, "을", "를")} 손에 넣었다!`);
       if (!npc.repeat) markDone(npc);
       return;
     }
@@ -1217,6 +1234,18 @@ async function bagMenuWorld() {
     const item = items[i];
     if (item === "몬스터볼") { await msg("전투 중에만 쓸 수 있다."); continue; }
     if (item === "포켓몬피리") { await msg("길을 막고 잠든 포켓몬 앞에서 말을 걸면 피리를 불 수 있다."); continue; }
+    if (item === "자전거") {
+      game.flags.bikeOn = !game.flags.bikeOn;
+      sfx.confirm();
+      await msg(game.flags.bikeOn ? "자전거에 올라탔다! 페달을 밟으면 두 배로 빠르다." : "자전거에서 내렸다.");
+      continue;
+    }
+    if (item === "비전머신03") {
+      await msg(canSurf()
+        ? "파도타기 비전머신. 물가를 향해 걸으면 그대로 물 위를 나아갈 수 있다."
+        : "파도타기 비전머신. 핑크배지가 있어야 물 위로 나아갈 수 있다.");
+      continue;
+    }
     if (HEAL_AMOUNT[item]) { await useHealItem(item, false); continue; }
     if (item === "이상한사탕") {
       const t = await choose(game.party.map((m) => `${monName(m)} Lv${m.level}`), { title: "누구에게 쓸까?", x: 60, y: 110, w: 420 });
@@ -1519,8 +1548,24 @@ function drawTile(ch, x, y, sx, sy, now) {
 function drawPlayer(now, camX, camY) {
   const p = playerWorldPos(now);
   const px = p.x * TILE + TILE / 2 - camX, py = p.y * TILE + TILE / 2 - p.hop - camY;
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 27 - camY, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const onWater = worldTile(Math.round(p.x), Math.round(p.y)) === "W";
+  if (onWater) {
+    const bob = Math.sin(now / 300) * 1.5;
+    ctx.fillStyle = "#5a7ab8";
+    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 26 + bob - camY, 13, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#3a5a98"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 26 + bob - camY, 13, 7, 0, 0, Math.PI * 2); ctx.stroke();
+  } else if (game.flags.bikeOn && game.bag["자전거"]) {
+    ctx.fillStyle = "#333";
+    ctx.beginPath(); ctx.arc(px - 6, py + 11, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + 6, py + 11, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#888"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(px - 6, py + 11); ctx.lineTo(px + 6, py + 11); ctx.stroke();
+  }
+  if (!onWater) {
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 27 - camY, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.fillStyle = "#3558c0"; ctx.fillRect(px - 7, py - 2, 14, 13);
   ctx.fillStyle = "#ffd9b0";
   ctx.beginPath(); ctx.arc(px, py - 8, 8, 0, Math.PI * 2); ctx.fill();

@@ -554,6 +554,9 @@ const KANTO_NPCS = [
     pass: "다, 당신은 챔피언...! 알겠습니다. 부디 조심하세요." },
   { id: "cerulean_girl", zone: "CERULEAN_CITY", dx: 30, dy: 28, color: "#e87aa0", name: "여성", kind: "talk",
     lines: ["북쪽 곶에는 포켓몬 연구가 마사키 씨가 살아. 다리에서는 트레이너들이 기다리고 있고."] },
+  { id: "bike_shop", zone: "CERULEAN_CITY", dx: 26, dy: 28, color: "#c8a040", name: "자전거숍 주인", kind: "itemVendor",
+    item: "자전거", price: 1000, repeat: false,
+    lines: ["어서 와! 최신형 자전거, 특별 세일 중이야.", "가방에서 꺼내 타면 걷기의 두 배로 빨라진다고!"] },
   /* 24-25번도로 */
   { id: "r24_jr", zone: "ROUTE_24", dx: 9, dy: 20, color: "#4a7ab8", name: "단짝소년 호석", kind: "trainer",
     team: [[63, 10], [16, 12]], intro: "골든브릿지에 도전하는 거야?", win: "다리는 아직 멀었어..." },
@@ -642,6 +645,10 @@ const KANTO_NPCS = [
   /* 사파리존 */
   { id: "safari_ranger", zone: "SAFARI_ZONE", dx: 20, dy: 50, color: "#5a8a3a", name: "레인저", kind: "talk",
     lines: ["여기는 사파리존. 야생 그대로의 환경이라 진귀한 포켓몬이 많아. 미니룡이 산다는 소문도 있어!"] },
+  { id: "safari_warden", zone: "SAFARI_ZONE", dx: 20, dy: 8, color: "#e8e4d8", name: "사파리존 원장", kind: "giftItem",
+    item: "비전머신03", count: 1,
+    lines: ["오오, 사파리존 가장 깊은 곳까지 오다니 대단한 트레이너군!", "기념으로 이걸 주지. 비전머신03 — 파도타기다! 핑크배지가 있다면 물가를 향해 걸을 때 그대로 물 위를 나아갈 수 있다네."],
+    after: "파도타기로 물 위를 달려 보게. 연분홍시티 남쪽 바다가 장관이라네!" },
   /* 홍련마을 */
   { id: "cinnabar_lab", zone: "CINNABAR_ISLAND", dx: 4, dy: 16, color: "#d8d8e8", name: "연구소 박사", kind: "gift",
     mon: [142, 30], needBadges: 7,
@@ -667,6 +674,6 @@ const KANTO_NPCS = [
 const START = { x: 62, y: 245 };
 /* 인카운터 확률 */
 const ENCOUNTER_RATE = 0.12;
-const ENCOUNTER_TILES = new Set(["G", "g"]);
+const ENCOUNTER_TILES = new Set(["G", "g", "W"]);
 /* 면적 집계 (원작 대비 검증용) */
 const ZONE_VOLUME = ZONES.reduce((s, z) => s + z.rect[2] * z.rect[3], 0);
