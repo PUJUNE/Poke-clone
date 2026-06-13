@@ -5,3 +5,12 @@ pokeclone_save.json
 # 개발 관련
 node_modules/
 *.log
+
+# 백업 폴더
+backup_*/
+
+# 재생성 가능한 덤프 산출물
+tools/world_dump.json
+
+# 세션 작업 로그
+working log/

@@ -12,7 +12,7 @@ const ctxStub = new Proxy({}, {
     : noop,
   set: () => true,
 });
-global.document = { getElementById: () => ({ getContext: () => ctxStub, width: 768, height: 576 }) };
+global.document = { getElementById: () => ({ getContext: () => ctxStub, width: 768, height: 576, addEventListener: noop, style: {} }) };
 global.window = { addEventListener: noop, AudioContext: undefined };
 global.localStorage = {
   _d: {},
