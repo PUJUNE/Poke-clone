@@ -610,15 +610,16 @@ async function handlePlayerFaint(b) {
   game.px = game.lastHeal.x; game.py = game.lastHeal.y; game.dir = "down";
   return true;
 }
+/* 반환: "blackout"(플레이어 전멸) | "end"(적 전멸로 종료) | null(전투 계속) */
 async function enemyFreeAttack(b) {
   const e = b.enemy;
-  if (e.hp <= 0) return false;
+  if (e.hp <= 0) return null;
   if (await canAct(e)) {
     await useMove(b, e, b.player, aiMove(e));
-    if (b.player.hp <= 0 && await handlePlayerFaint(b)) return true;
+    if (b.player.hp <= 0 && await handlePlayerFaint(b)) return "blackout";
   }
-  if (await endChip(e)) return await handleEnemyFaint(b);
-  return false;
+  if (await endChip(e)) { if (await handleEnemyFaint(b)) return "end"; }
+  return null;
 }
 
 /* opts.trainer = { name, team: [mon...], prize } → 트레이너 연속 전투 (포획·도주 불가) */
@@ -681,11 +682,15 @@ async function startBattle(enemy, opts = {}) {
     } else if (action === 1) {
       const r = await battleBagMenu(b);
       if (r === "caught") { result = "caught"; break battle; }
-      if (r === "used" && await enemyFreeAttack(b)) break battle;
+      if (r === "used") {
+        const fr = await enemyFreeAttack(b);
+        if (fr) { result = fr; break battle; }
+      }
     } else if (action === 2) {
       const prev = b.player;
       if (await battlePartyMenu(b) && b.player !== prev) {
-        if (await enemyFreeAttack(b)) break battle;
+        const fr = await enemyFreeAttack(b);
+        if (fr) { result = fr; break battle; }
       }
     } else {
       if (b.trainer) { await msg("트레이너와의 승부 도중에는 도망칠 수 없다!"); continue; }
@@ -695,7 +700,8 @@ async function startBattle(enemy, opts = {}) {
         break battle;
       }
       await msg("도망칠 수 없었다!");
-      if (await enemyFreeAttack(b)) break battle;
+      const fr = await enemyFreeAttack(b);
+      if (fr) { result = fr; break battle; }
     }
   }
   ui.battle = null;
