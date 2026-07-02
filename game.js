@@ -1358,6 +1358,26 @@ window.addEventListener("keyup", (e) => releaseKey(KEY_ALIAS[e.key] || e.key));
 
 /* ===================== 터치 입력 (모바일) ===================== */
 let IS_TOUCH = false;
+function tapKey(k) { pressKey(k); releaseKey(k); }
+/* 캔버스 탭: 메시지 넘김 / 메뉴 항목 선택·확정 / 메뉴 밖 취소 */
+function canvasTap(cx, cy) {
+  if (ui.message) { tapKey("z"); return; }
+  const m = ui.menu;
+  if (!m) return;
+  const g = menuGeom(m);
+  if (cx < g.x || cx > g.x + g.w || cy < g.y || cy > g.y + g.h) {
+    if (m.cancelable) tapKey("x");
+    return;
+  }
+  const vr = Math.floor((cy - g.y - g.titleH - 10) / g.rowH);
+  if (vr < 0 || vr >= g.visRows) return;
+  const colW = (g.w - 24) / g.cols;
+  const c = Math.max(0, Math.min(g.cols - 1, Math.floor((cx - g.x - 12) / colW)));
+  const i = (m.top + vr) * g.cols + c;
+  if (i < 0 || i >= m.options.length) return;
+  if (i === m.index) tapKey("z");
+  else { m.index = i; sfx.cursor(); }
+}
 function setupTouch() {
   const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   if (!coarse && !("ontouchstart" in window)) return;
@@ -1383,6 +1403,12 @@ function setupTouch() {
   bindBtn("vA", "z");
   bindBtn("vB", "x");
   bindBtn("vMenu", "Enter");
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    audioInit();
+    const rect = canvas.getBoundingClientRect();
+    canvasTap((e.clientX - rect.left) * (W / rect.width), (e.clientY - rect.top) * (H / rect.height));
+  });
   document.addEventListener("touchmove", (e) => {
     if (!e.target.closest("#savebar")) e.preventDefault();
   }, { passive: false });
@@ -1787,9 +1813,7 @@ function drawMessageBox(now) {
     ctx.fill();
   }
 }
-function drawMenu() {
-  const m = ui.menu;
-  if (!m) return;
+function menuGeom(m) {
   const cols = m.cols;
   const totalRows = Math.ceil(m.options.length / cols);
   const visRows = Math.min(totalRows, m.maxRows);
@@ -1799,6 +1823,12 @@ function drawMenu() {
   const h = visRows * rowH + 24 + titleH;
   const x = m.x !== undefined ? m.x : W - w - 16;
   const y = m.y !== undefined ? m.y : H - h - 16;
+  return { cols, totalRows, visRows, w, rowH, titleH, h, x, y };
+}
+function drawMenu() {
+  const m = ui.menu;
+  if (!m) return;
+  const { cols, totalRows, visRows, w, rowH, titleH, h, x, y } = menuGeom(m);
   ctx.fillStyle = "rgba(252,252,245,0.96)";
   ctx.strokeStyle = "#5a5a4a"; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill(); ctx.stroke();
