@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>포켓몬 클론 — 1세대 151마리 · 관동지방</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -15,6 +15,19 @@
     <button id="btnImport" type="button">세이브 불러오기 (JSON)</button>
     <span id="saveStatus"></span>
     <input id="fileImport" type="file" accept="application/json,.json" hidden>
+  </div>
+</div>
+<div id="vpad">
+  <div id="dpad">
+    <button class="vbtn" id="vUp" type="button">▲</button>
+    <button class="vbtn" id="vLeft" type="button">◀</button>
+    <button class="vbtn" id="vRight" type="button">▶</button>
+    <button class="vbtn" id="vDown" type="button">▼</button>
+  </div>
+  <button class="vbtn vmenu" id="vMenu" type="button">MENU</button>
+  <div id="abpad">
+    <button class="vbtn vab" id="vB" type="button">B</button>
+    <button class="vbtn vab" id="vA" type="button">A</button>
   </div>
 </div>
 <script src="pokedex.js"></script>

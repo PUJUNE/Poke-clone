@@ -1333,12 +1333,8 @@ async function titleFlow() {
 
 /* ===================== 입력 ===================== */
 const KEY_ALIAS = { Z: "z", X: "x", W: "w", A: "a", S: "s", D: "d" };
-window.addEventListener("keydown", (e) => {
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
-  audioInit();
-  const k = KEY_ALIAS[e.key] || e.key;
+function pressKey(k) {
   held.add(k);
-  if (e.repeat) return;
   if (keyResolver) {
     const r = keyResolver;
     keyResolver = null;
@@ -1349,8 +1345,50 @@ window.addEventListener("keydown", (e) => {
     if (k === "z" || k === " ") interact();
     else if (k === "Enter" || k === "Escape" || k === "x") worldMenu();
   }
+}
+function releaseKey(k) { held.delete(k); }
+window.addEventListener("keydown", (e) => {
+  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) e.preventDefault();
+  audioInit();
+  const k = KEY_ALIAS[e.key] || e.key;
+  if (e.repeat) { held.add(k); return; }
+  pressKey(k);
 });
-window.addEventListener("keyup", (e) => held.delete(KEY_ALIAS[e.key] || e.key));
+window.addEventListener("keyup", (e) => releaseKey(KEY_ALIAS[e.key] || e.key));
+
+/* ===================== 터치 입력 (모바일) ===================== */
+let IS_TOUCH = false;
+function setupTouch() {
+  const coarse = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  if (!coarse && !("ontouchstart" in window)) return;
+  IS_TOUCH = true;
+  document.body.classList.add("touch");
+  const help = document.getElementById("help");
+  if (help) help.textContent = "이동: 십자패드 | A: 확인·조사 | B: 취소 | MENU: 메뉴·저장";
+  const bindBtn = (id, key) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const down = (e) => { e.preventDefault(); audioInit(); el.classList.add("pressed"); pressKey(key); };
+    const up = (e) => { e.preventDefault(); el.classList.remove("pressed"); releaseKey(key); };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("pointerleave", up);
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+  };
+  bindBtn("vUp", "ArrowUp");
+  bindBtn("vDown", "ArrowDown");
+  bindBtn("vLeft", "ArrowLeft");
+  bindBtn("vRight", "ArrowRight");
+  bindBtn("vA", "z");
+  bindBtn("vB", "x");
+  bindBtn("vMenu", "Enter");
+  document.addEventListener("touchmove", (e) => {
+    if (!e.target.closest("#savebar")) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("gesturestart", (e) => e.preventDefault());
+}
+setupTouch();
 
 /* ===================== 업데이트 ===================== */
 function update(now) {
@@ -1837,7 +1875,7 @@ function drawTitle(now) {
     drawMon(id, "front", W / 2 + (i - (lineup.length - 1) / 2) * 100, 305 + bob, 84));
   ctx.font = "15px 'Malgun Gothic', sans-serif";
   ctx.fillStyle = "#8a93c4";
-  ctx.fillText("Z / Enter 키로 선택", W / 2, 540);
+  ctx.fillText(IS_TOUCH ? "A 버튼으로 선택" : "Z / Enter 키로 선택", W / 2, 540);
 }
 
 /* ===================== 메인 루프 ===================== */
@@ -1856,3 +1894,10 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 titleFlow();
+
+/* 테스트 계측용 훅 (게임 로직 미사용) */
+window._dbg = () => ({
+  state: game.state, px: game.px, py: game.py,
+  menu: !!ui.menu, msg: !!ui.message,
+  menuIndex: ui.menu ? ui.menu.index : -1, touch: IS_TOUCH,
+});
