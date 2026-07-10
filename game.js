@@ -1391,7 +1391,7 @@ function setupTouch() {
   IS_TOUCH = true;
   document.body.classList.add("touch");
   const help = document.getElementById("help");
-  if (help) help.textContent = "이동: 십자패드 | A: 확인·조사 | B: 취소 | MENU: 메뉴·저장";
+  if (help) help.textContent = "이동: 대각선 방향패드/화면 탭 | A: 확인·조사 | B: 취소 | MENU: 메뉴·저장";
   const bindBtn = (id, key) => {
     const el = document.getElementById(id);
     if (!el) return;

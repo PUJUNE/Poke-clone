@@ -98,11 +98,13 @@ body.touch #vpad { display: block; }
   height: 192px;
   pointer-events: none;
 }
-#dpad .vbtn { border-radius: 14px; }
-#vUp    { left: 64px; top: 0; }
-#vLeft  { left: 0; top: 64px; }
-#vRight { left: 128px; top: 64px; }
-#vDown  { left: 64px; top: 128px; }
+#dpad .vbtn { border-radius: 14px; font-size: 24px; }
+/* 다이아몬드(아이소메트릭) 화면 방향에 맞춘 대각선 배치
+   ↖왼쪽  ↗위  ↙아래  ↘오른쪽 — 버튼이 가리키는 화면 방향으로 이동 */
+#vLeft  { left: 0;     top: 0; }
+#vUp    { left: 128px; top: 0; }
+#vDown  { left: 0;     top: 128px; }
+#vRight { left: 128px; top: 128px; }
 #abpad {
   position: absolute;
   right: max(14px, env(safe-area-inset-right));
