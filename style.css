@@ -93,18 +93,29 @@ body.touch #vpad { display: block; }
 #dpad {
   position: absolute;
   left: max(14px, env(safe-area-inset-left));
-  bottom: max(18px, env(safe-area-inset-bottom));
-  width: 192px;
-  height: 192px;
+  bottom: max(58px, calc(env(safe-area-inset-bottom) + 44px));
+  width: 220px;
+  height: 220px;
   pointer-events: none;
 }
-#dpad .vbtn { border-radius: 14px; font-size: 24px; }
 /* 다이아몬드(아이소메트릭) 화면 방향에 맞춘 대각선 배치
-   ↖왼쪽  ↗위  ↙아래  ↘오른쪽 — 버튼이 가리키는 화면 방향으로 이동 */
-#vLeft  { left: 0;     top: 0; }
-#vUp    { left: 128px; top: 0; }
-#vDown  { left: 0;     top: 128px; }
-#vRight { left: 128px; top: 128px; }
+   버튼은 마름모로 회전, 화살표(span)는 45° 되돌려 똑바로 표시
+   ↖왼쪽  ↗위  ↙아래  ↘오른쪽 — 버튼 위치·방향 모두 화면 이동과 일치 */
+#dpad .vbtn {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+#dpad .vbtn span { display: block; transform: rotate(-45deg); }
+#vLeft  { left: 20px;  top: 20px; }   /* ↖ 좌상 */
+#vUp    { left: 128px; top: 20px; }   /* ↗ 우상 */
+#vDown  { left: 20px;  top: 128px; }  /* ↙ 좌하 */
+#vRight { left: 128px; top: 128px; }  /* ↘ 우하 */
 #abpad {
   position: absolute;
   right: max(14px, env(safe-area-inset-right));
