@@ -1446,246 +1446,347 @@ function playerWorldPos(now) {
   }
   return { x, y, hop };
 }
-function drawTile(ch, x, y, sx, sy, now) {
-  // 바탕
-  if ("cRg".includes(ch)) { ctx.fillStyle = "#3a3028"; ctx.fillRect(sx, sy, TILE, TILE); }
-  else if (ch === "W") { ctx.fillStyle = "#3d8cf0"; ctx.fillRect(sx, sy, TILE, TILE); }
-  else if (ch === "s") { ctx.fillStyle = "#e8dba3"; ctx.fillRect(sx, sy, TILE, TILE); }
-  else { ctx.fillStyle = (x + y) % 2 === 0 ? "#7ec850" : "#79c14b"; ctx.fillRect(sx, sy, TILE, TILE); }
+/* ===================================================================
+   렌더: 월드 — 라그나로크풍 준3D(아이소메트릭) 렌더러
+   - 논리 좌표(그리드)는 그대로 두고 화면 투영만 2:1 다이아몬드로 변환
+   - 지형은 높이맵(물=0 / 지면=1 / 건물·바위=2)으로 절벽·입체 표현
+   - 캐릭터·나무·표지판 등은 지면 위에 세워지는 빌보드 스프라이트
+   =================================================================== */
+const IW = 32, IH = 16, LIFT = 15;          // 다이아몬드 반너비/반높이, 높이 1단당 픽셀
+function isoX(x, y) { return (x - y) * IW; }
+function isoYb(x, y) { return (x + y) * IH; } // h=0 기준 바닥 y
+function tileHeight(ch) {
+  if (ch === "W") return 0;                   // 물: 한 단 낮음(해안 절벽)
+  if (ch === "B" || ch === "R") return 2;     // 건물벽·바위산: 한 단 높음
+  return 1;                                   // 그 외 지면
+}
+/* 지면 윗면 색 + 절벽(측면) 색 — 라그나로크풍 따뜻한 팔레트 */
+const GROUND = {
+  ".": { top: "#dcc58c", se: "#b39158", sw: "#8f7343" },
+  "G": { top: "#57b23c", se: "#6a5230", sw: "#4f3c22" },
+  "g": { top: "#7e8a49", se: "#5a4e2e", sw: "#443a22" },
+  "c": { top: "#7a6a56", se: "#544636", sw: "#3f3427" },
+  "s": { top: "#e8d7a2", se: "#cdb474", sw: "#ac9558" },
+  "W": { top: "#4a90d9", se: "#3773b4", sw: "#2b5c93" },
+  def: { top: "#83c65f", se: "#7a5c3a", sw: "#5c4530" },
+};
+const RAISED = {
+  "B": { top: "#c96f52", se: "#e2d2b8", sw: "#c2ab8b" },  // 지붕 / 벽
+  "R": { top: "#a99a84", se: "#7c6f5c", sw: "#5e5344" },  // 바위산
+};
+function groundPal(ch) { return GROUND[ch] || GROUND.def; }
 
+/* 다이아몬드 윗면 (cx,topY = 위 꼭짓점) */
+function fillDiamond(cx, topY, col) {
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.lineTo(cx + IW, topY + IH);
+  ctx.lineTo(cx, topY + 2 * IH);
+  ctx.lineTo(cx - IW, topY + IH);
+  ctx.closePath();
+  ctx.fillStyle = col; ctx.fill();
+}
+/* 남동(오른쪽) 측벽 */
+function wallSE(cx, topY, wh, col) {
+  const rx = cx + IW, ry = topY + IH, bx = cx, by = topY + 2 * IH;
+  ctx.beginPath();
+  ctx.moveTo(rx, ry); ctx.lineTo(bx, by);
+  ctx.lineTo(bx, by + wh); ctx.lineTo(rx, ry + wh);
+  ctx.closePath();
+  ctx.fillStyle = col; ctx.fill();
+}
+/* 남서(왼쪽) 측벽 */
+function wallSW(cx, topY, wh, col) {
+  const bx = cx, by = topY + 2 * IH, lx = cx - IW, ly = topY + IH;
+  ctx.beginPath();
+  ctx.moveTo(bx, by); ctx.lineTo(lx, ly);
+  ctx.lineTo(lx, ly + wh); ctx.lineTo(bx, by + wh);
+  ctx.closePath();
+  ctx.fillStyle = col; ctx.fill();
+}
+
+/* 지면 타일 하나: 측벽 + 윗면(+간단 텍스처) */
+function drawGround(x, y, ch, sxTop, syBase, now) {
+  const h = tileHeight(ch);
+  const topY = syBase - h * LIFT;
+  const pal = RAISED[ch] || groundPal(ch);
+  // 측벽: 이웃이 더 낮으면 그린다
+  const hE = tileHeight(worldTile(x + 1, y));   // 동쪽 → 남동벽
+  const hS = tileHeight(worldTile(x, y + 1));   // 남쪽 → 남서벽
+  if (hE < h) wallSE(sxTop, topY, (h - hE) * LIFT, pal.se);
+  if (hS < h) wallSW(sxTop, topY, (h - hS) * LIFT, pal.sw);
+  // 윗면
+  fillDiamond(sxTop, topY, pal.top);
+  const cx = sxTop, cy = topY + IH;           // 다이아몬드 중심
   switch (ch) {
-    case ".": {
-      ctx.fillStyle = "#e8d5a3"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.fillStyle = "#dcc78f"; ctx.fillRect(sx + 4, sy + 4, 6, 6); ctx.fillRect(sx + 20, sy + 18, 6, 6);
-      break;
-    }
-    case "G": {
-      ctx.fillStyle = "#4ea63b"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.fillStyle = "#3c8c2e";
-      for (let i = 0; i < 4; i++) {
-        const gx = sx + 3 + i * 8;
-        ctx.beginPath(); ctx.moveTo(gx, sy + 28); ctx.lineTo(gx + 3, sy + 10); ctx.lineTo(gx + 6, sy + 28); ctx.fill();
-      }
-      break;
-    }
-    case "g": {
-      ctx.fillStyle = "#4a3e33"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.fillStyle = "#5f5045";
-      ctx.beginPath(); ctx.arc(sx + 10, sy + 20, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(sx + 22, sy + 12, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(sx + 20, sy + 24, 3, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
-    case "c": {
-      ctx.fillStyle = "#4a3e33"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.fillStyle = "#41362c"; ctx.fillRect(sx + 6, sy + 8, 5, 5); ctx.fillRect(sx + 20, sy + 20, 5, 5);
-      break;
-    }
-    case "R": {
-      ctx.fillStyle = "#6a5a48"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.fillStyle = "#7d6c58"; ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-      ctx.fillStyle = "#5a4c3c"; ctx.fillRect(sx + 6, sy + 14, 8, 6); ctx.fillRect(sx + 18, sy + 6, 8, 6);
-      break;
-    }
-    case "T": {
-      ctx.fillStyle = "#6b4a2b"; ctx.fillRect(sx + 12, sy + 18, 8, 12);
-      ctx.fillStyle = "#2e7d32"; ctx.beginPath(); ctx.arc(sx + 16, sy + 12, 13, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#388e3c";
-      ctx.beginPath(); ctx.arc(sx + 10, sy + 16, 8, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(sx + 22, sy + 16, 8, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
     case "W": {
-      ctx.strokeStyle = "#7ab8ff"; ctx.lineWidth = 2;
-      const ph = Math.sin(now / 500 + x + y) * 2;
+      ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.lineWidth = 1.5;
+      const ph = Math.sin(now / 480 + (x + y) * 0.6) * 2.5;
       ctx.beginPath();
-      ctx.moveTo(sx + 4, sy + 16 + ph);
-      ctx.quadraticCurveTo(sx + 10, sy + 12 + ph, sx + 16, sy + 16 + ph);
-      ctx.quadraticCurveTo(sx + 22, sy + 20 + ph, sx + 28, sy + 16 + ph);
+      ctx.moveTo(cx - 12, cy + ph);
+      ctx.quadraticCurveTo(cx - 4, cy - 3 + ph, cx + 2, cy + ph);
+      ctx.quadraticCurveTo(cx + 8, cy + 3 + ph, cx + 13, cy + ph);
       ctx.stroke();
       break;
     }
-    case "s": {
-      ctx.fillStyle = "#dbcb8d"; ctx.fillRect(sx + 5, sy + 7, 4, 3); ctx.fillRect(sx + 20, sy + 20, 4, 3);
+    case "G": {
+      ctx.fillStyle = "#3f8f2a";
+      for (const [dx, dy] of [[-8, 2], [2, -3], [8, 4], [-2, 6]]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + dx, cy + dy + 3);
+        ctx.lineTo(cx + dx + 2, cy + dy - 5);
+        ctx.lineTo(cx + dx + 4, cy + dy + 3);
+        ctx.fill();
+      }
       break;
     }
-    case "F": {
-      ctx.fillStyle = "#a87844";
-      ctx.fillRect(sx + 2, sy + 12, TILE - 4, 6);
-      ctx.fillRect(sx + 4, sy + 6, 5, 20); ctx.fillRect(sx + 23, sy + 6, 5, 20);
+    case ".": {
+      ctx.fillStyle = "rgba(0,0,0,0.08)";
+      ctx.beginPath(); ctx.arc(cx - 6, cy + 2, 2, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 7, cy - 3, 1.6, 0, 7); ctx.fill();
       break;
     }
-    case "B": {
-      ctx.fillStyle = "#c0623c"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#8a4226"; ctx.lineWidth = 1.5;
-      ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
-      ctx.fillStyle = "#e8d5a3"; ctx.fillRect(sx + 8, sy + 9, 7, 7); ctx.fillRect(sx + 19, sy + 9, 7, 7);
-      break;
-    }
-    case "H": {
-      ctx.fillStyle = "#f7e9ec"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#d8b8c0"; ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
-      ctx.fillStyle = "#e0526a";
-      ctx.fillRect(sx + 13, sy + 7, 6, 18); ctx.fillRect(sx + 7, sy + 13, 18, 6);
-      break;
-    }
-    case "M": {
-      ctx.fillStyle = "#dfeefb"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#9ab8d8"; ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
-      ctx.fillStyle = "#3d6cb0";
-      ctx.fillRect(sx + 7, sy + 7, 18, 8);
-      ctx.fillStyle = "#fff";
-      ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
-      ctx.fillText("SHOP", sx + 16, sy + 14);
-      ctx.fillStyle = "#3d6cb0"; ctx.fillRect(sx + 12, sy + 18, 8, 12);
-      break;
-    }
-    case "h": {
-      ctx.fillStyle = "#c0623c"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#8a4226"; ctx.lineWidth = 1.5;
-      ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
-      ctx.fillStyle = "#6b3a1e"; ctx.fillRect(sx + 10, sy + 10, 12, 22);
-      ctx.fillStyle = "#ffd24d"; ctx.fillRect(sx + 18, sy + 20, 3, 3);
-      break;
-    }
-    case "D": {
-      ctx.fillStyle = "#c0623c"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#8a4226"; ctx.lineWidth = 1.5;
-      ctx.strokeRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
-      ctx.fillStyle = "#5a3a8a"; ctx.fillRect(sx + 8, sy + 8, 16, 24);
-      ctx.fillStyle = "#ffd24d";
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 17, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#5a3a8a";
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 17, 2, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
-    case "E": {
-      ctx.fillStyle = "#3b2f6e"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.strokeStyle = "#ffd24d"; ctx.lineWidth = 2;
-      ctx.strokeRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-      ctx.fillStyle = "#ffd24d";
-      ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
-      ctx.fillText("리그", sx + 16, sy + 21);
-      break;
-    }
-    case "S": {
-      ctx.fillStyle = "#8a6238"; ctx.fillRect(sx + 14, sy + 16, 4, 12);
-      ctx.fillStyle = "#c49a6c"; ctx.fillRect(sx + 5, sy + 5, 22, 13);
-      ctx.strokeStyle = "#6b4a2b"; ctx.strokeRect(sx + 5, sy + 5, 22, 13);
-      ctx.fillStyle = "#6b4a2b"; ctx.fillRect(sx + 9, sy + 9, 14, 2); ctx.fillRect(sx + 9, sy + 13, 10, 2);
+    case "c": case "g": {
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.beginPath(); ctx.arc(cx - 5, cy + 3, 2.4, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 6, cy - 2, 1.8, 0, 7); ctx.fill();
       break;
     }
     case "f": {
-      ctx.fillStyle = "#ff8fb3";
-      for (const [fx2, fy2] of [[10, 10], [22, 20]]) {
-        ctx.beginPath(); ctx.arc(sx + fx2, sy + fy2, 3.5, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.fillStyle = "#ffd24d";
-      ctx.beginPath(); ctx.arc(sx + 10, sy + 10, 1.5, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.arc(sx + 22, sy + 20, 1.5, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
-    case "I": {
-      ctx.fillStyle = "#e8d5a3"; ctx.fillRect(sx, sy, TILE, TILE);
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 16, 9, 0, Math.PI * 2);
-      ctx.fillStyle = "#e0392f"; ctx.fill();
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 16, 9, 0, Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
-      ctx.strokeStyle = "#333"; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 16, 9, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(sx + 7, sy + 16); ctx.lineTo(sx + 25, sy + 16); ctx.stroke();
-      ctx.beginPath(); ctx.arc(sx + 16, sy + 16, 2.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); ctx.stroke();
-      break;
-    }
-    case "L": {
-      const key = x + "," + y;
-      const spec = LEGEND_AT[key];
-      if (spec) {
-        const bob = Math.sin(now / 350 + x) * 2;
-        drawMon(spec.id, "front", sx + 16, sy + 14 + bob, 40);
-        ctx.fillStyle = "rgba(255,210,77," + (0.25 + 0.15 * Math.sin(now / 300)) + ")";
-        ctx.beginPath(); ctx.arc(sx + 16, sy + 16, 14, 0, Math.PI * 2); ctx.fill();
+      const cols = ["#ff8fb3", "#ffd24d", "#c79bff"];
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = cols[i];
+        const fx = cx + [-8, 4, 9][i], fy = cy + [2, -4, 6][i];
+        ctx.beginPath(); ctx.arc(fx, fy, 2.6, 0, 7); ctx.fill();
       }
       break;
     }
   }
+  // 건물 지붕(윗면) 라인 + 창문
+  if (ch === "B") {
+    ctx.strokeStyle = "rgba(120,50,30,0.35)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx - IW + 4, cy); ctx.lineTo(cx + IW - 4, cy); ctx.stroke();
+    if (hS < h) { // 남서벽에 창문
+      ctx.fillStyle = "#8fb6d8";
+      ctx.fillRect(cx - 18, topY + 2 * IH + 4, 6, 6);
+      ctx.fillRect(cx - 8, topY + 2 * IH + 9, 6, 6);
+    }
+    if (hE < h) { // 남동벽에 창문
+      ctx.fillStyle = "#8fb6d8";
+      ctx.fillRect(cx + 6, topY + 2 * IH + 4, 6, 6);
+      ctx.fillRect(cx + 14, topY + 2 * IH + 9, 6, 6);
+    }
+  }
 }
-function drawPlayer(now, camX, camY) {
-  const p = playerWorldPos(now);
-  const px = p.x * TILE + TILE / 2 - camX, py = p.y * TILE + TILE / 2 - p.hop - camY;
-  const onWater = worldTile(Math.round(p.x), Math.round(p.y)) === "W";
-  if (onWater) {
-    const bob = Math.sin(now / 300) * 1.5;
-    ctx.fillStyle = "#5a7ab8";
-    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 26 + bob - camY, 13, 7, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#3a5a98"; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 26 + bob - camY, 13, 7, 0, 0, Math.PI * 2); ctx.stroke();
-  } else if (game.flags.bikeOn && game.bag["자전거"]) {
-    ctx.fillStyle = "#333";
-    ctx.beginPath(); ctx.arc(px - 6, py + 11, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px + 6, py + 11, 3.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = "#888"; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(px - 6, py + 11); ctx.lineTo(px + 6, py + 11); ctx.stroke();
+
+/* ---------- 빌보드 스프라이트 ---------- */
+function bShadow(cx, gy, r) {
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath(); ctx.ellipse(cx, gy, r, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+}
+function drawTreeBB(cx, gy) {
+  bShadow(cx, gy, 12);
+  ctx.fillStyle = "#6b4a2b";
+  ctx.fillRect(cx - 3, gy - 14, 6, 14);
+  const puffs = [[0, -34, 15], [-11, -26, 11], [11, -26, 11], [0, -44, 11]];
+  ctx.fillStyle = "#2f7d34";
+  for (const [dx, dy, r] of puffs) { ctx.beginPath(); ctx.arc(cx + dx, gy + dy, r, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "#43a047";
+  for (const [dx, dy, r] of puffs) { ctx.beginPath(); ctx.arc(cx + dx - 3, gy + dy - 3, r * 0.6, 0, 7); ctx.fill(); }
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.beginPath(); ctx.arc(cx - 5, gy - 46, 5, 0, 7); ctx.fill();
+}
+function drawFenceBB(cx, gy) {
+  ctx.strokeStyle = "#8a6b45"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx - 12, gy - 8); ctx.lineTo(cx + 12, gy - 8); ctx.stroke();
+  ctx.fillStyle = "#a5814f";
+  for (const dx of [-12, 0, 12]) ctx.fillRect(cx + dx - 2, gy - 16, 4, 16);
+}
+function drawSignBB(cx, gy) {
+  bShadow(cx, gy, 8);
+  ctx.fillStyle = "#8a6238"; ctx.fillRect(cx - 2, gy - 16, 4, 16);
+  ctx.fillStyle = "#c49a6c"; ctx.fillRect(cx - 12, gy - 30, 24, 15);
+  ctx.strokeStyle = "#6b4a2b"; ctx.lineWidth = 1.5; ctx.strokeRect(cx - 12, gy - 30, 24, 15);
+  ctx.fillStyle = "#6b4a2b";
+  ctx.fillRect(cx - 8, gy - 26, 16, 2); ctx.fillRect(cx - 8, gy - 21, 11, 2);
+}
+function drawItemBB(cx, gy) {
+  bShadow(cx, gy, 7);
+  const r = 8, y = gy - 8;
+  ctx.beginPath(); ctx.arc(cx, y, r, 0, Math.PI); ctx.fillStyle = "#fff"; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, y, r, Math.PI, 0); ctx.fillStyle = "#e0392f"; ctx.fill();
+  ctx.strokeStyle = "#333"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, y, r, 0, 7); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - r, y); ctx.lineTo(cx + r, y); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, y, 2.6, 0, 7); ctx.fillStyle = "#fff"; ctx.fill(); ctx.stroke();
+}
+/* 문(입구) 타일: 건물 벽면에 붙은 아치형 문 + 표식 */
+const DOOR_STYLE = {
+  h: { wall: "#c96f52", door: "#6b3a1e", icon: "win" },
+  H: { wall: "#f2dfe4", door: "#e0526a", icon: "cross" },
+  M: { wall: "#dfeefb", door: "#3d6cb0", icon: "shop" },
+  D: { wall: "#e7dcc4", door: "#5a3a8a", icon: "gym" },
+  E: { wall: "#3b2f6e", door: "#2a2050", icon: "리그" },
+};
+function drawDoorBB(cx, gy, ch) {
+  const st = DOOR_STYLE[ch] || DOOR_STYLE.h;
+  bShadow(cx, gy, 11);
+  // 벽 판넬
+  ctx.fillStyle = st.wall; ctx.fillRect(cx - 13, gy - 30, 26, 30);
+  ctx.strokeStyle = "rgba(0,0,0,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(cx - 13, gy - 30, 26, 30);
+  // 문
+  ctx.fillStyle = st.door;
+  ctx.beginPath();
+  ctx.moveTo(cx - 8, gy);
+  ctx.lineTo(cx - 8, gy - 14);
+  ctx.quadraticCurveTo(cx, gy - 22, cx + 8, gy - 14);
+  ctx.lineTo(cx + 8, gy);
+  ctx.closePath(); ctx.fill();
+  // 표식
+  ctx.textAlign = "center";
+  if (st.icon === "cross") {
+    ctx.fillStyle = "#fff"; ctx.fillRect(cx - 2, gy - 28, 4, 10); ctx.fillRect(cx - 5, gy - 25, 10, 4);
+  } else if (st.icon === "win") {
+    ctx.fillStyle = "#ffd24d"; ctx.fillRect(cx - 3, gy - 10, 3, 3);
+  } else if (st.icon === "shop") {
+    ctx.fillStyle = "#fff"; ctx.font = "bold 8px sans-serif"; ctx.fillText("SHOP", cx, gy - 22);
+  } else if (st.icon === "gym") {
+    ctx.fillStyle = "#ffd24d"; ctx.beginPath(); ctx.arc(cx, gy - 24, 4, 0, 7); ctx.fill();
+  } else {
+    ctx.fillStyle = "#ffd24d"; ctx.font = "bold 10px 'Malgun Gothic',sans-serif"; ctx.fillText(st.icon, cx, gy - 20);
   }
-  if (!onWater) {
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.beginPath(); ctx.ellipse(p.x * TILE + 16 - camX, p.y * TILE + 27 - camY, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.fillStyle = "#3558c0"; ctx.fillRect(px - 7, py - 2, 14, 13);
+}
+function drawLegendBB(cx, gy, x, y, now) {
+  const spec = LEGEND_AT[x + "," + y];
+  if (!spec) return;
+  const bob = Math.sin(now / 350 + x) * 3;
+  ctx.fillStyle = "rgba(255,210,77," + (0.25 + 0.15 * Math.sin(now / 300)) + ")";
+  ctx.beginPath(); ctx.ellipse(cx, gy - 6, 20, 10, 0, 0, Math.PI * 2); ctx.fill();
+  drawMon(spec.id, "front", cx, gy - 20 + bob, 44);
+}
+/* 트레이너(주인공/NPC) 빌보드 */
+function drawTrainerBB(cx, feetY, bodyCol, hairCol, dir, hop, cap) {
+  bShadow(cx, feetY, 9);
+  const y = feetY - hop;
+  ctx.fillStyle = bodyCol; ctx.fillRect(cx - 7, y - 15, 14, 14);
   ctx.fillStyle = "#ffd9b0";
-  ctx.beginPath(); ctx.arc(px, py - 8, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#e0392f";
-  ctx.beginPath(); ctx.arc(px, py - 10, 8, Math.PI, 0); ctx.fill();
-  ctx.fillRect(px - 8, py - 11, 16, 3);
-  ctx.fillStyle = "#222";
-  const eo = { down: [[-3, -6], [3, -6]], up: [], left: [[-4, -6]], right: [[4, -6]] }[game.dir];
-  for (const [ex, ey] of eo) ctx.fillRect(px + ex - 1, py + ey, 2.4, 3);
-}
-function drawNPC(n, sx, sy, now) {
-  if (n.kind === "snorlax") {
-    drawMon(143, "front", sx + 16, sy + 12, 40);
-    const zz = Math.floor(now / 600) % 2;
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(zz ? "Z z" : "z Z", sx + 28, sy + 2);
-    return;
+  ctx.beginPath(); ctx.arc(cx, y - 21, 8, 0, Math.PI * 2); ctx.fill();
+  if (cap) {
+    ctx.fillStyle = "#e0392f";
+    ctx.beginPath(); ctx.arc(cx, y - 23, 8, Math.PI, 0); ctx.fill();
+    ctx.fillRect(cx - 8, y - 24, 16, 3);
+  } else {
+    ctx.fillStyle = hairCol;
+    ctx.beginPath(); ctx.arc(cx, y - 24, 8, Math.PI, 0); ctx.fill();
   }
-  ctx.fillStyle = "rgba(0,0,0,0.25)";
-  ctx.beginPath(); ctx.ellipse(sx + 16, sy + 27, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = n.color || "#888";
-  ctx.fillRect(sx + 9, sy + 12, 14, 13);
-  ctx.fillStyle = "#ffd9b0";
-  ctx.beginPath(); ctx.arc(sx + 16, sy + 8, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#4a3a2a";
-  ctx.beginPath(); ctx.arc(sx + 16, sy + 5, 8, Math.PI, 0); ctx.fill();
   ctx.fillStyle = "#222";
-  ctx.fillRect(sx + 12, sy + 9, 2.4, 3); ctx.fillRect(sx + 18, sy + 9, 2.4, 3);
+  const eo = { down: [[-3, -19], [3, -19]], up: [], left: [[-4, -19]], right: [[4, -19]] }[dir] || [[-3, -19], [3, -19]];
+  for (const [ex, ey] of eo) ctx.fillRect(cx + ex - 1, y + ey, 2.4, 3);
 }
+
+/* ---------- 월드 프레임 ---------- */
 function drawWorld(now) {
+  // 하늘/보이드 배경
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#243447"); sky.addColorStop(1, "#141d2a");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+
   const p = playerWorldPos(now);
-  let camX = p.x * TILE + TILE / 2 - W / 2;
-  let camY = p.y * TILE + TILE / 2 - H / 2;
-  camX = Math.max(0, Math.min(WORLD_W * TILE - W, camX));
-  camY = Math.max(0, Math.min(WORLD_H * TILE - H, camY));
-  const tx0 = Math.floor(camX / TILE), ty0 = Math.floor(camY / TILE);
-  for (let y = ty0; y <= ty0 + VIEW_H && y < WORLD_H; y++) {
-    for (let x = tx0; x <= tx0 + VIEW_W && x < WORLD_W; x++) {
-      drawTile(WORLD[y][x], x, y, x * TILE - camX, y * TILE - camY, now);
-    }
+  const ph = tileHeight(worldTile(Math.round(p.x), Math.round(p.y)));
+  const camX = isoX(p.x, p.y) - W / 2;
+  const camY = isoYb(p.x, p.y) - ph * LIFT - H * 0.56;
+
+  // 화면 4모서리를 역투영해 보이는 타일 범위 산출
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  for (const [Sx, Sy] of [[0, -80], [W, -80], [0, H + 80], [W, H + 80]]) {
+    const wx = Sx + camX, wy = Sy + camY;
+    const tx = (wx / IW + wy / IH) / 2, ty = (wy / IH - wx / IW) / 2;
+    minX = Math.min(minX, tx); maxX = Math.max(maxX, tx);
+    minY = Math.min(minY, ty); maxY = Math.max(maxY, ty);
   }
+  const x0 = Math.max(0, Math.floor(minX) - 2), x1 = Math.min(WORLD_W - 1, Math.ceil(maxX) + 2);
+  const y0 = Math.max(0, Math.floor(minY) - 2), y1 = Math.min(WORLD_H - 1, Math.ceil(maxY) + 4);
+
+  // 뒤→앞(깊이=x+y) 정렬을 위해 반대각선 순회
+  const cells = [];
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++)
+      cells.push([x, y]);
+  cells.sort((a, b) => (a[0] + a[1]) - (b[0] + b[1]) || a[0] - b[0]);
+
+  // 1패스: 지면 + 절벽
+  for (const [x, y] of cells) {
+    const ch = WORLD[y][x];
+    drawGround(x, y, ch, isoX(x, y) - camX, isoYb(x, y) - camY, now);
+  }
+
+  // 2패스: 빌보드(오브젝트 + NPC + 주인공) — 깊이순
+  const OBJ = new Set(["T", "F", "S", "I", "L", "h", "H", "M", "D", "E"]);
+  const sprites = [];
+  for (const [x, y] of cells) {
+    const ch = WORLD[y][x];
+    if (!OBJ.has(ch)) continue;
+    const cx = isoX(x, y) - camX, gy = isoYb(x, y) - camY + IH;
+    sprites.push({ d: x + y, x, y, fn: () => {
+      if (ch === "T") drawTreeBB(cx, gy);
+      else if (ch === "F") drawFenceBB(cx, gy);
+      else if (ch === "S") drawSignBB(cx, gy);
+      else if (ch === "I") drawItemBB(cx, gy);
+      else if (ch === "L") drawLegendBB(cx, gy, x, y, now);
+      else drawDoorBB(cx, gy, ch);
+    } });
+  }
+  // NPC
   for (const n of KANTO_NPCS) {
     if (npcGone(n)) continue;
-    if (n.x < tx0 - 1 || n.x > tx0 + VIEW_W + 1 || n.y < ty0 - 1 || n.y > ty0 + VIEW_H + 1) continue;
-    drawNPC(n, n.x * TILE - camX, n.y * TILE - camY, now);
+    if (n.x < x0 - 1 || n.x > x1 + 1 || n.y < y0 - 1 || n.y > y1 + 1) continue;
+    const cx = isoX(n.x, n.y) - camX, gy = isoYb(n.x, n.y) - camY + IH;
+    sprites.push({ d: n.x + n.y + 0.1, x: n.x, y: n.y, fn: () => {
+      if (n.kind === "snorlax") {
+        bShadow(cx, gy, 16);
+        drawMon(143, "front", cx, gy - 16, 44);
+        const zz = Math.floor(now / 600) % 2;
+        ctx.fillStyle = "#fff"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(zz ? "Z z" : "z Z", cx + 20, gy - 34);
+      } else {
+        drawTrainerBB(cx, gy, n.color || "#888", "#4a3a2a", "down", 0, false);
+      }
+    } });
   }
-  drawPlayer(now, camX, camY);
-  // 지역명 표시
+  // 주인공
+  {
+    const cx = isoX(p.x, p.y) - camX, gy = isoYb(p.x, p.y) - ph * LIFT - camY + IH;
+    const onWater = worldTile(Math.round(p.x), Math.round(p.y)) === "W";
+    sprites.push({ d: p.x + p.y + 0.15, x: p.x, y: p.y, fn: () => {
+      if (onWater) {
+        const bob = Math.sin(now / 300) * 1.5;
+        ctx.fillStyle = "#5a7ab8";
+        ctx.beginPath(); ctx.ellipse(cx, gy + 4 + bob, 15, 8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#3a5a98"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(cx, gy + 4 + bob, 15, 8, 0, 0, Math.PI * 2); ctx.stroke();
+        drawTrainerBB(cx, gy + bob, "#3558c0", "#4a3a2a", game.dir, 0, true);
+      } else if (game.flags.bikeOn && game.bag["자전거"]) {
+        drawTrainerBB(cx, gy, "#3558c0", "#4a3a2a", game.dir, p.hop, true);
+        ctx.strokeStyle = "#666"; ctx.lineWidth = 2; ctx.fillStyle = "#333";
+        ctx.beginPath(); ctx.arc(cx - 8, gy - 2, 4, 0, 7); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx + 8, gy - 2, 4, 0, 7); ctx.stroke();
+      } else {
+        drawTrainerBB(cx, gy, "#3558c0", "#4a3a2a", game.dir, p.hop, true);
+      }
+    } });
+  }
+  sprites.sort((a, b) => a.d - b.d || a.y - b.y);
+  for (const s of sprites) s.fn();
+
+  // 지역명 배너
   const zone = zoneAt(game.px, game.py);
   if (zone) {
-    ctx.fillStyle = "rgba(20,24,48,0.75)";
-    ctx.beginPath(); ctx.roundRect(10, 10, ctx.measureText(zone.name).width + 60, 30, 8); ctx.fill();
-    ctx.fillStyle = "#ffd24d";
     ctx.font = "bold 15px 'Malgun Gothic', sans-serif";
     ctx.textAlign = "left";
+    const wBanner = ctx.measureText(zone.name).width + 60;
+    ctx.fillStyle = "rgba(20,24,48,0.75)";
+    ctx.beginPath(); ctx.roundRect(10, 10, wBanner, 30, 8); ctx.fill();
+    ctx.fillStyle = "#ffd24d";
     ctx.fillText(zone.name, 24, 30);
   }
 }
