@@ -99,19 +99,31 @@ body.touch #vpad { display: block; }
   pointer-events: none;
 }
 /* 다이아몬드(아이소메트릭) 화면 방향에 맞춘 대각선 배치
-   버튼은 마름모로 회전, 화살표(span)는 45° 되돌려 똑바로 표시
-   ↖왼쪽  ↗위  ↙아래  ↘오른쪽 — 버튼 위치·방향 모두 화면 이동과 일치 */
+   마름모 모양은 ::before(배경만 45° 회전)로 그리고, 화살표 글리프는
+   회전하지 않아 항상 대각선(↖↗↙↘)을 가리킨다 — HTML/CSS 의존 없음
+   ↖좌상  ↗우상  ↙좌하  ↘우하 — 버튼 위치·화살표 모두 화면 이동과 일치 */
 #dpad .vbtn {
   width: 72px;
   height: 72px;
-  border-radius: 16px;
-  transform: rotate(45deg);
+  background: transparent;
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 28px;
+  z-index: 0;
 }
-#dpad .vbtn span { display: block; transform: rotate(-45deg); }
+#dpad .vbtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  transform: rotate(45deg);
+  z-index: -1;
+}
+#dpad .vbtn.pressed::before { background: rgba(255, 255, 255, 0.38); }
 #vLeft  { left: 20px;  top: 20px; }   /* ↖ 좌상 */
 #vUp    { left: 128px; top: 20px; }   /* ↗ 우상 */
 #vDown  { left: 20px;  top: 128px; }  /* ↙ 좌하 */
